@@ -20,7 +20,7 @@ Google's **production-ready, open-source inference framework** for deploying LLM
 | Native audio input | **Yes** | No | No | No |
 | Native vision input | **Yes** | Yes | Yes | Yes |
 | Metal GPU on Mac | **Yes** (C++ API) | Yes | Yes | Yes |
-| Python GPU | Not yet | Yes | N/A | Yes |
+| Python GPU | **Yes** (WebGPU/Metal, v0.10.1) | Yes | N/A | Yes |
 | Production pedigree | Chrome, Pixel Watch | Dev tool | Library | Research |
 
 **Key advantages**: Smallest model size (aggressive mixed-precision quant), native audio (no separate STT needed), Google-optimized for Google's own model.
@@ -55,8 +55,8 @@ No M3 Pro benchmarks published, but expect GPU decode in the 60-100+ tok/s range
 
 | Language | Status | Best For |
 |----------|--------|----------|
-| **C++** | **Stable** | High-performance native (our choice) |
-| Python | Stable | Prototyping (CPU-only, GPU upcoming) |
+| **C++** | **Stable** | High-performance native |
+| Python | Stable | Prototyping & production (CPU + GPU via WebGPU/Metal) |
 | Kotlin | Stable | Android apps |
 | Swift | **In Dev** | iOS/macOS (no public code yet) |
 

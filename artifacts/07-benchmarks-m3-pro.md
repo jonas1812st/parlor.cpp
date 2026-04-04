@@ -65,6 +65,31 @@ Always use the Metal symlink.
 | **Decode** | **57.8 tok/s** | 26.5 tok/s | **2.2x** |
 | Model size | 2.58 GB | 3.65 GB | 1 GB smaller |
 
+## Python API — GPU (WebGPU/Metal) vs CPU
+
+As of litert-lm v0.10.1, `Backend.GPU` works in Python despite docs saying "upcoming".
+Audio backend is model-constrained to CPU only.
+
+```python
+engine = litert_lm.Engine(
+    MODEL_PATH,
+    backend=litert_lm.Backend.GPU,
+    vision_backend=litert_lm.Backend.GPU,
+    audio_backend=litert_lm.Backend.CPU,  # model requires CPU
+)
+```
+
+| Metric | Python GPU (WebGPU) | Python CPU | GPU Speedup |
+|--------|-------------------|------------|-------------|
+| **Prefill** | **865.6 tok/s** | 247.0 tok/s | **3.5x** |
+| **Decode** | **84.1 tok/s** | 38.5 tok/s | **2.2x** |
+| **TTFT** | **0.086s** | 0.285s | **3.3x** |
+| Init time | ~1.0s | ~0.4s | Slower (shader compilation) |
+
+**Known warning (non-fatal):** `Could not load symbol LiteRtTopKWebGpuSampler_UpdateConfig` — falls back to CPU sampling, GPU compute still active.
+
+**Real-world impact:** LLM latency in the demo dropped from ~15-16s to ~7-8s (roughly halved).
+
 ## Comparison with Published Benchmarks
 
 Published benchmarks are E2B on M4 Max:

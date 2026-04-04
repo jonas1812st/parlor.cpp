@@ -39,8 +39,8 @@ def load_models():
     print(f"Loading Gemma 4 E2B from {MODEL_PATH}...")
     engine = litert_lm.Engine(
         MODEL_PATH,
-        backend=litert_lm.Backend.CPU,
-        vision_backend=litert_lm.Backend.CPU,
+        backend=litert_lm.Backend.GPU,
+        vision_backend=litert_lm.Backend.GPU,
         audio_backend=litert_lm.Backend.CPU,
     )
     engine.__enter__()
