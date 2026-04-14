@@ -6,6 +6,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.env
 
 
 # Models (too large for git)
