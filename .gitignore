@@ -21,3 +21,6 @@ default.profraw
 # IDE
 .idea/
 .vscode/
+
+# Sample files
+samples/
