@@ -1,4 +1,4 @@
-# Parlor
+# Parlor.cpp by jonas
 
 On-device, real-time multimodal AI. Have natural voice and vision conversations with an AI that runs entirely on your machine.
 
