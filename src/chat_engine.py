@@ -1,5 +1,5 @@
 import base64
-from typing import Literal
+from typing import Generator, Literal
 import requests
 import os
 import json
@@ -104,7 +104,7 @@ class LlamaChatEngine:
 
         return base64_audio, audio_format
 
-    def send_message(self, text=None, audio_path=None, temperature=0.4):
+    def send_message(self, text=None, audio_path=None, temperature=0.4, stream=False):
         """
         Adds the new message (text and/or audio) to history,
         sends full history to the API, and stores the response.
@@ -148,7 +148,7 @@ class LlamaChatEngine:
                 "model": self.model_name,
                 "messages": self.messages,
                 "temperature": str(temperature),
-                "stream": False,
+                "stream": stream,
                 "return_progress": True,
                 "reasoning_format": "auto",
                 "backend_sampling": False,
@@ -162,7 +162,13 @@ class LlamaChatEngine:
         )
         headers = {"Content-Type": "application/json"}
 
-        # 4. Send API request
+        if stream:
+            return self._handle_stream(payload, headers)
+        else:
+            return self._handle_blocking(payload, headers)
+
+    def _handle_blocking(self, payload, headers):
+        """The blocking version of the request, which waits for the full response before proceeding."""
         try:
             response = requests.request(
                 "POST", url=self.endpoint, headers=headers, data=payload
@@ -199,9 +205,7 @@ class LlamaChatEngine:
                         }
 
                     elif tool_name == "respond_to_user":
-                        return (
-                            parsed_args  # Return transcription & response directly
-                        )
+                        return parsed_args  # Return transcription & response directly
 
                 except json.JSONDecodeError:
                     return {
@@ -222,3 +226,97 @@ class LlamaChatEngine:
             # so we can retry without polluting chat history.
             self.messages.pop()
             return f"API communication error: {e}\nDetails: {getattr(e.args[0], 'text', 'No details')}"
+
+    def _handle_stream(
+        self, payload, headers
+    ) -> Generator[dict[str, str | dict | list], None, None]:
+        """Handles the streaming response from the server, yielding chunks as they arrive."""
+        try:
+            response = requests.request(
+                "POST", url=self.endpoint, headers=headers, data=payload, stream=True
+            )
+
+            response.raise_for_status()
+
+            full_content = ""
+            function_name = ""
+            function_arguments = ""
+            is_tool_call = False
+
+            # Process server sent events
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode("utf-8")
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk["choices"][0]["delta"]
+
+                            # Case A: Streaming regular text content
+                            if "content" in delta and delta["content"] is not None:
+                                token: str = delta["content"]
+                                full_content += token
+                                yield {"type": "text", "content": token}
+
+                            # Case B: A tool is being streamed (JSON fragments)
+                            elif "tool_calls" in delta and delta["tool_calls"]:
+                                is_tool_call = True
+                                tool_delta = delta["tool_calls"][0]
+
+                                if "function" in tool_delta:
+                                    if "name" in tool_delta["function"]:
+                                        function_name: str = tool_delta["function"][
+                                            "name"
+                                        ]
+                                    if "arguments" in tool_delta["function"]:
+                                        arg_chunk: str = tool_delta["function"][
+                                            "arguments"
+                                        ]
+                                        function_arguments += arg_chunk
+                                        yield {
+                                            "type": "tool_chunk",
+                                            "content": arg_chunk,
+                                        }
+
+                        except json.JSONDecodeError:
+                            continue
+
+            # Update the chat history with the final assistant message (including tool call if applicable)
+            if is_tool_call:
+                self.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": function_name,
+                                    "arguments": function_arguments,
+                                },
+                            }
+                        ],
+                    }
+                )
+                try:
+                    final_json: dict[str, str | dict] = json.loads(function_arguments)
+                    yield {
+                        "type": "tool_done",
+                        "name": function_name,
+                        "parsed": final_json,
+                    }
+                except json.JSONDecodeError:
+                    yield {
+                        "type": "error",
+                        "content": "Tool-Argumente konnten am Ende nicht geparst werden.",
+                    }
+            else:
+                self.messages.append({"role": "assistant", "content": full_content})
+
+        except requests.exceptions.RequestException as e:
+            self.messages.pop()
+            yield {"type": "error", "content": str(e)}
